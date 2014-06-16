@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+import sys
+import global_vars #Global variables in a module
+import cmd_line #Command line parsing
+import postscript
+import geometry
+import matrix
+import xpm
+
+def main():
+	#Parse commandline into globals
+	cmd_line.parse(sys.argv)
+	
+	#Parse ps file into geometric objects
+	geometric_objects = postscript.get_geometric_objects(global_vars.ps_file)
+	
+	#Do transforms
+	geometric_objects = geometry.transform_objects(geometric_objects, global_vars.scale, global_vars.rotation_cc, global_vars.trans_x, global_vars.trans_y)
+	
+	#Clip geometric objects to window
+	geometric_objects = geometry.clip_geometric_objects_to_window(geometric_objects, global_vars.lower_bound_x, global_vars.lower_bound_y, global_vars.upper_bound_x, global_vars.upper_bound_y)
+
+	#Tranform again into viewport
+	geometric_objects = geometry.viewport_transform(geometric_objects,global_vars.lower_bound_x, global_vars.lower_bound_y, global_vars.upper_bound_x, global_vars.upper_bound_y, global_vars.vp_lower_bound_x, global_vars.vp_lower_bound_y, global_vars.vp_upper_bound_x, global_vars.vp_upper_bound_y)
+	
+	#Convert geometric objects into list of points (does filling too)
+	points = geometry.geometric_objects_to_points(geometric_objects)
+	
+	#Convert points to pixel map
+	pixel_map = geometry.points_to_pixel_map(points, global_vars.img_res_x, global_vars.img_res_y)
+	
+	#Write out xpm file
+	xpm.do_xpm_write(pixel_map)
+	
+
+#Script starts here, call main
+main()
+
+#\rm tmp.xpm; ./CG_hw3 > tmp.xpm && display tmp.xpm
+#\rm tmp.xpm; ./CG_hw3 -f hw3_split.ps -a 0 -b 0 -c 500 -d 500 -j 0 -k 0 -o 500 -p 500 -s 1.0 -m 0 -n 0 -r 0 > tmp.xpm && display tmp.xpm
+#\rm tmp.xpm; ./CG_hw3 -f hw3_split.ps -a 50 -b 0 -c 325 -d 500 -j 0 -k 110 -o 480 -p 410 -s 1 -m 0 -n 0 -r 0 > tmp.xpm && display tmp.xpm
+#\rm tmp.xpm; ./CG_hw3 -f hw3_split.ps -a 10 -b 10 -c 550 -d 400 -j 10 -k 10 -o 500 -p 400 -s 1.2 -m 6 -n 25 -r 8 > tmp.xpm && display tmp.xpm
+#\rm tmp.xpm; ./CG_hw3 -b 62 -c 500 -d 479 -r 75 -j 139 -o 404 -p 461 -s .85 -m 300 > tmp.xpm && display tmp.xpm
+
+

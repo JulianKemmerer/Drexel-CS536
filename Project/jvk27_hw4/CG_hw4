@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+import sys
+import global_vars
+import cmd_line
+import smf
+import geometry
+import matrix
+import xpm
+
+def main():
+	#Parse commandline into globals
+	cmd_line.parse(sys.argv)
+	
+	#Parse smf files into smf models
+	smf_models = smf.get_smf_models([global_vars.smf_file])
+	
+	#Get normalizing tranformation matrices, not efficient to calculate both always but whatever
+	npar,nper = geometry.get_npar_nper(global_vars.vrp_x, global_vars.vrp_y, global_vars.vrp_z, global_vars.vpn_x, global_vars.vpn_y, global_vars.vpn_z, global_vars.vup_x, global_vars.vup_y, global_vars.vup_z, global_vars.vrc_u_min, global_vars.vrc_u_max, global_vars.vrc_v_min, global_vars.vrc_v_max, global_vars.prp_x, global_vars.prp_y, global_vars.prp_z, global_vars.front_clip_value, global_vars.back_clip_value)
+	
+	#Apply transformation matricies, applied matrix depends on parallel v.s. perspective switch
+	smf_models = geometry.apply_par_per_transforms(smf_models,npar,nper,global_vars.use_parallel_projection)
+	
+	#Models are now in normalized view volume coords
+	
+	#Perform parallel projection or perform perspective projection 
+	smf_models = geometry.perform_projection(smf_models,global_vars.use_parallel_projection, global_vars.prp_z, global_vars.back_clip_value)
+	
+	#Models should be in 2D at this point (Z can be ignored)
+	#Still in normalized view volume coords
+	
+	#Transform from normalized view volume to viewport
+	smf_models = geometry.do_normalized_window_to_viewport_transform(smf_models, global_vars.prp_z, global_vars.back_clip_value, global_vars.vp_lower_bound_x, global_vars.vp_lower_bound_y, global_vars.vp_upper_bound_x, global_vars.vp_upper_bound_y, global_vars.use_parallel_projection)
+	
+	#Render the model into polygons (geometric objects)
+	geometric_objects = geometry.render_smf_to_polys(smf_models)
+	
+	#Clip geometric objects to window (viewport now?)
+	geometric_objects = geometry.clip_geometric_objects_to_window(geometric_objects, global_vars.vp_lower_bound_x, global_vars.vp_lower_bound_y, global_vars.vp_upper_bound_x, global_vars.vp_upper_bound_y)
+	
+	#Convert geometric objects into list of points (does filling too)
+	points = geometry.geometric_objects_to_points(geometric_objects)
+	
+	#Convert points to pixel map
+	pixel_map = geometry.points_to_pixel_map(points, global_vars.img_res_x, global_vars.img_res_y)
+	
+	#Write out xpm file
+	xpm.do_xpm_write(pixel_map)
+	
+
+#Script starts here, call main
+main()
+
+# \rm tmp.xpm; ./CG_hw4 -f cube.smf -u -1.5 -v -1.5 -U 1.5 -V 1.5 -F 1 -B -5 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f cube.smf -q 1.5 -r 2 -w 5 -u -1 -v -1 -U 1 -V 1 -z 6 -F 1 -B -5 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f cube.smf -u -1.5 -v -1.5 -U 1.5 -V 1.5 -F 1 -B -5 -P > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f cube.smf -q 1.5 -r 2 -w 5 -u -1 -v -1 -U 1 -V 1 -z 6 -F 1 -B -5 -P > tmp.xpm && display tmp.xpm;
+
+# \rm tmp.xpm; ./CG_hw4 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-lo-sphere.smf -x -1.0 -z 0.5 -q 1.0 -w -0.5 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-lo-sphere.smf -q 1.0 -w -1.0 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-lo-sphere.smf -x -4.0 -z 5.0 -q 1.0 -w -0.5 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-lo-sphere.smf -k 125 -p 375 -q 1.0 -u -1.4 -U 1.4 > tmp.xpm && display tmp.xpm;
+
+# \rm tmp.xpm; ./CG_hw4 -f bound-bunny_200.smf -j 100 -k 50 -o 400 -p 450 -x 0.5 -y 0.2 -z 1.0 -X 0.2 -Y -0.2 -Z 0.3 -q -3.0 -r -2.0 -w 1.0 -Q 3.0 -R -2 -W -4.0 -u -.5 -v -.9 -U 1.2 -V .8 -P > tmp.xpm && display tmp.xpm;
+
+# \rm tmp.xpm; ./CG_hw4 -f bound-bunny_200.smf -j 100 -k 50 -o 400 -p 450 -x 0.5 -y 0.2 -z 1.0 -X 0.2 -Y -0.2 -Z 0.3 -q -3.0 -r -2.0 -w 1.0 -Q 3.0 -R -2 -W -4.0 -u -.5 -v -.9 -U 1.2 -V .8 > tmp.xpm && display tmp.xpm;
+
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -P > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -j 0 -k 30 -o 275 -p 305 -P > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -x 1.5 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -x 4.75 -y -3.25 -z 3.3 -P > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -X 0.25 -Y -0.15 -Z 0.3 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -X 0.25 -Y -0.15 -Z 0.3 -j 103 -k 143 -o 421 -p 379 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -X 0.35 -Y -0.3 -Z 0.3 -u -0.35 -v -0.35 -j 43 -k 71 -o 201 -p 402 -P > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -q -1 -r 1.5 -w -2.0 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -Q 1.5 -R 1 -W .4 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw4 -f bound-cow.smf -u -1.5 -v -0.9 -U 1.2 -V 0.7 > tmp.xpm && display tmp.xpm;

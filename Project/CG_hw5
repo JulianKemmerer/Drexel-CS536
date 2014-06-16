@@ -1,0 +1,66 @@
+#!/usr/bin/env python
+import sys
+import global_vars
+import cmd_line
+import smf
+import geometry
+import matrix
+import xpm
+
+def main():
+	#Parse commandline into globals
+	cmd_line.parse(sys.argv)
+	
+	#Parse smf files into smf models
+	smf_models = smf.get_smf_models(global_vars.smf_files, xpm.ALL_COLORS)
+	
+	#Get normalizing tranformation matrices, not efficient to calculate both always but whatever
+	npar,nper = geometry.get_npar_nper(global_vars.vrp_x, global_vars.vrp_y, global_vars.vrp_z, global_vars.vpn_x, global_vars.vpn_y, global_vars.vpn_z, global_vars.vup_x, global_vars.vup_y, global_vars.vup_z, global_vars.vrc_u_min, global_vars.vrc_u_max, global_vars.vrc_v_min, global_vars.vrc_v_max, global_vars.prp_x, global_vars.prp_y, global_vars.prp_z, global_vars.front_clip_value, global_vars.back_clip_value)
+	
+	#Apply transformation matricies, applied matrix depends on parallel v.s. perspective switch
+	smf_models = geometry.apply_par_per_transforms(smf_models,npar,nper,global_vars.use_parallel_projection)
+	
+	#Models are now in normalized view volume coords
+	
+	#Perform parallel projection or perform perspective projection 
+	smf_models = geometry.perform_projection(smf_models,global_vars.use_parallel_projection, global_vars.prp_z, global_vars.back_clip_value)
+	
+	#Models should be in 2D at this point (Z can be ignored)
+	#Still in normalized view volume coords
+	
+	#Transform from normalized view volume to viewport
+	smf_models = geometry.do_normalized_window_to_viewport_transform(smf_models, global_vars.prp_z, global_vars.back_clip_value, global_vars.vp_lower_bound_x, global_vars.vp_lower_bound_y, global_vars.vp_upper_bound_x, global_vars.vp_upper_bound_y, global_vars.use_parallel_projection)
+	
+	#Models are now in viewport coords
+	
+	#Render the model into polygons (geometric objects)
+	geometric_objects = geometry.render_smf_to_polys(smf_models)
+	
+	#Clip geometric objects to window (viewport now?)
+	#CG_hw5: You can assume that your meshes will not be clipped, and that you only need to render triangles.
+	#geometric_objects = geometry.clip_geometric_objects_to_window(geometric_objects, global_vars.vp_lower_bound_x, global_vars.vp_lower_bound_y, global_vars.vp_upper_bound_x, global_vars.vp_upper_bound_y)
+	
+	#Convert geometric objects into list of points (can do filling too)
+	#Return dict[geometric_object index] = [points]
+	geometric_object_index_to_points = geometry.geometric_objects_to_points(geometric_objects,do_filling=True)
+	
+	#Do Z-buffering w/ front/back clipping, return pixel map
+	pixel_map = geometry.geometric_objects_to_pixel_map(geometric_object_index_to_points, geometric_objects, global_vars.img_res_x, global_vars.img_res_y, global_vars.front_clip_value)
+	
+	#Write out xpm file
+	xpm.do_xpm_write(pixel_map)
+	
+
+#Script starts here, call main
+main()
+
+#CG_hw4 re-tests:
+#\rm tmp.xpm; ./CG_hw5 -f bound-lo-sphere.smf -j 0 -k 0 -o 500 -p 500 -x 0.0 -y 0.0 -z 1.0 -X 0.0 -Y 0.0 -Z 0.0 -q 0.0 -r 0.0 -w -1.0 -Q 0.0 -R 1.0 -W 0.0 -u -0.7 -v -0.7 -U 0.7 -V 0.7 > tmp.xpm && display tmp.xpm;
+#\rm tmp.xpm; ./CG_hw5 -f bound-cow.smf -x 4.75 -y -3.25 -z 3.3 -P > tmp.xpm && display tmp.xpm;
+#\rm tmp.xpm; ./CG_hw5 -f bound-cow.smf -X 0.35 -Y -0.3 -Z 0.3 -u -0.35 -v -0.35 -j 43 -k 71 -o 201 -p 402 -P > tmp.xpm && display tmp.xpm;
+#CG_hw5 tests:
+# \rm tmp.xpm; ./CG_hw5 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw5 -f1 bound-cow.smf -F 0.1 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw5 -f1 bound-cow.smf -F 0.1 -B -0.18 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw5 -f1 bound-bunny_1k.smf -f2 bound-cow.smf -f3 bound-sprtrd.smf -u -.8 -U .8 -v -.8 -V .8 > tmp.xpm && display tmp.xpm;
+# \rm tmp.xpm; ./CG_hw5 -f1 bound-bunny_1k.smf -f2 bound-cow.smf -f3 bound-sprtrd.smf -q .4 -r .2 -w 1 -u -.6 -v -.6 -U .6 -V .6 -P > tmp.xpm && display tmp.xpm;
